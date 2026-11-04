@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>our soundboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ink: #1c1b20;
+      --blue: #bfdaf7;
+      --blue-on: #94c2f1;
+      --pink: #fde2eb;
+      --pink-on: #f8bdd2;
+      --muted: #8b8a94;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      background: #fff;
+      color: var(--ink);
+      font-family: 'Fredoka', ui-rounded, 'SF Pro Rounded', system-ui, -apple-system, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+    body {
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+    }
+    .note {
+      margin: 0;
+      padding: clamp(20px, 4vh, 34px) 16px 0;
+      text-align: center;
+      font-size: clamp(21px, 5.4vw, 28px);
+      font-weight: 600;
+      letter-spacing: .01em;
+      color: var(--ink);
+    }
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 22px;
+      padding: 24px 14px 36px;
+    }
+
+    /* 3x3 grid: 8 pads around the photo */
+    .board {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: clamp(10px, 3vw, 18px);
+      width: min(92vw, 540px);
+    }
+    .cell { aspect-ratio: 1 / 1; min-width: 0; }
+    .photo { display: flex; align-items: center; justify-content: center; }
+    .photo img {
+      width: 100%;
+      height: auto;
+      pointer-events: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .pad {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      padding: 8px;
+      border: 4px solid var(--ink);
+      border-radius: 26px;
+      background: var(--blue);
+      box-shadow: 0 6px 0 var(--ink);
+      color: var(--ink);
+      font: inherit;
+      font-weight: 600;
+      font-size: clamp(14px, 3.7vw, 20px);
+      line-height: 1.15;
+      text-align: center;
+      overflow-wrap: anywhere;
+      cursor: pointer;
+      touch-action: manipulation;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+      transition: transform .06s ease, box-shadow .06s ease, background-color .12s ease;
+    }
+    .pad.pink { background: var(--pink); }
+    .pad:active, .pad.hit { transform: translateY(4px); box-shadow: 0 2px 0 var(--ink); }
+    .pad.playing { background: var(--blue-on); }
+    .pad.pink.playing { background: var(--pink-on); }
+    /* little stop square while a sound plays: tap the pad again to stop it */
+    .pad.playing::before {
+      content: '';
+      position: absolute;
+      top: 11px;
+      right: 12px;
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+      background: var(--ink);
+    }
+    body.editing .pad.playing::before { display: none; }
+    .pad:focus-visible { outline: 3px solid var(--blue-on); outline-offset: 4px; }
+
+    .pad.empty {
+      background: #fff;
+      border-style: dashed;
+      box-shadow: none;
+      color: var(--muted);
+      font-weight: 500;
+    }
+    .pad.empty:active, .pad.empty.hit { transform: translateY(2px); }
+    .pad .plus { font-size: 2em; line-height: .9; font-weight: 500; }
+    .pad .sub { font-size: .62em; font-weight: 500; color: var(--muted); }
+
+    .pad.loading::after {
+      content: '';
+      position: absolute;
+      bottom: 10px;
+      width: 22%;
+      height: 4px;
+      border-radius: 4px;
+      background: var(--ink);
+      opacity: .25;
+      animation: pulse 1s ease-in-out infinite;
+    }
+    @keyframes pulse { 50% { opacity: .6; } }
+
+    .pad .pencil {
+      display: none;
+      position: absolute;
+      top: 6px;
+      right: 9px;
+      font-size: .75em;
+    }
+    body.editing .pad .pencil { display: block; }
+    body.editing .pad { animation: wiggle 1s ease-in-out infinite; }
+    body.editing .pad:nth-child(even) { animation-delay: -.5s; }
+    @keyframes wiggle { 0%, 100% { rotate: -1.5deg; } 50% { rotate: 1.5deg; } }
+    @media (prefers-reduced-motion: reduce) {
+      body.editing .pad { animation: none; }
+    }
+
+    .controls { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+    .status { min-height: 1.3em; margin: 0; color: var(--muted); font-size: 15px; text-align: center; }
+
+    .btn {
+      font: inherit;
+      font-weight: 600;
+      font-size: 16px;
+      color: var(--ink);
+      background: #fff;
+      border: 3px solid var(--ink);
+      border-radius: 999px;
+      padding: 9px 18px;
+      box-shadow: 0 3px 0 var(--ink);
+      cursor: pointer;
+      touch-action: manipulation;
+      transition: transform .06s ease, box-shadow .06s ease;
+    }
+    .btn:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 1px 0 var(--ink); }
+    .btn:disabled { opacity: .4; cursor: default; }
+    .btn.primary { background: var(--pink); }
+    .btn.blue { background: var(--blue); }
+    .btn.quiet { border-color: transparent; box-shadow: none; background: none; color: var(--muted); padding-left: 8px; padding-right: 8px; }
+    .btn.danger { color: #c2185b; }
+    .btn.recording { background: #ffd6d6; }
+
+    dialog {
+      width: min(92vw, 390px);
+      border: 4px solid var(--ink);
+      border-radius: 26px;
+      padding: 20px 20px 18px;
+      box-shadow: 0 8px 0 var(--ink);
+      color: var(--ink);
+    }
+    dialog::backdrop { background: rgba(255, 255, 255, .78); }
+    dialog h2 { margin: 0 0 14px; font-size: 22px; font-weight: 600; outline: none; }
+    dialog label { display: block; font-size: 14px; color: var(--muted); margin-bottom: 6px; }
+    .text {
+      width: 100%;
+      font: inherit;
+      font-size: 18px;
+      padding: 10px 14px;
+      border: 3px solid var(--ink);
+      border-radius: 16px;
+      outline: none;
+    }
+    .text:focus { background: #f7fbff; }
+    .sound-info { margin: 16px 0 10px; font-size: 15px; }
+    .row { display: flex; gap: 8px; }
+    .row .btn { flex: 1 1 0; min-width: 0; padding: 9px 4px; font-size: 15px; white-space: nowrap; }
+    .msg { min-height: 1.3em; margin: 12px 0 0; font-size: 14px; color: #c2185b; }
+    .msg.ok { color: var(--muted); }
+    .footer { display: flex; align-items: center; gap: 8px; margin-top: 16px; }
+    .footer .spacer { flex: 1; }
+    .hidden-input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+    /* small phones (320 to 360px wide): give the editor buttons a bit more room */
+    @media (max-width: 360px) {
+      dialog { max-width: none; padding: 18px 12px 16px; }
+      .row { gap: 6px; }
+      .row .btn { font-size: 13px; padding: 9px 2px; }
+      .footer { gap: 4px; }
+    }
+  </style>
+</head>
+<body>
+  <header><p class="note">i love you :&gt; - julean</p></header>
+  <main>
+    <div class="board" id="board">
+      <button type="button" class="cell pad"></button>
+      <button type="button" class="cell pad"></button>
+      <button type="button" class="cell pad"></button>
+      <button type="button" class="cell pad"></button>
+      <div class="cell photo"><img src="data:image/png;base64,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" alt="a blue cat and a pink cat hugging"></div>
+      <button type="button" class="cell pad"></button>
+      <button type="button" class="cell pad"></button>
+      <button type="button" class="cell pad"></button>
+      <button type="button" class="cell pad"></button>
+    </div>
+
+    <div class="controls">
+      <button type="button" class="btn" id="editToggle">✎ edit sounds</button>
+      <p class="status" id="status" role="status" aria-live="polite"></p>
+    </div>
+  </main>
+
+  <dialog id="editor">
+    <h2 id="edTitle" tabindex="-1" autofocus>pad 1</h2>
+
+    <label for="edLabel">button label</label>
+    <input class="text" id="edLabel" maxlength="24" placeholder="name it…" autocomplete="off">
+
+    <p class="sound-info" id="edInfo">no sound yet</p>
+    <div class="row">
+      <button type="button" class="btn blue" id="edRecord">● record</button>
+      <button type="button" class="btn" id="edUpload">⬆&#xFE0E; upload</button>
+      <button type="button" class="btn" id="edPreview">▶&#xFE0E; play</button>
+    </div>
+    <input type="file" id="edFile" class="hidden-input" accept="audio/*" tabindex="-1">
+
+    <p class="msg" id="edMsg" role="status" aria-live="polite"></p>
+
+    <div class="footer">
+      <button type="button" class="btn quiet danger" id="edRemove">remove</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn quiet" id="edCancel">cancel</button>
+      <button type="button" class="btn primary" id="edSave">save</button>
+    </div>
+  </dialog>
+
+  <script>
+    // Paste your Apps Script web app URL here (Deploy > Manage deployments > the /exec link).
+    const API_URL = 'https://script.google.com/macros/s/AKfycbwPETmZl0TjPCnAWOCiQ4NNHN9XnIXOFQK1b9k1bUtRDyMLlSaY_3hkZVHT0KWoXQ9M/exec';
+
+    // use the cat photo as the tab icon (reuses the image already on the page)
+    const icon = document.createElement('link');
+    icon.rel = 'icon';
+    icon.href = document.querySelector('.photo img').src;
+    document.head.appendChild(icon);
+
+    const SLOTS = 8;
+    const MAX_SECONDS = 10;   // longest clip kept
+    const RATE = 22050;       // saved clips are mono 16-bit WAV at this rate (~44 KB per second)
+    const COLORS = ['pink', 'blue', 'pink', 'blue', 'blue', 'pink', 'blue', 'pink']; // corners pink, edges blue
+
+    const pads = Array.from({ length: SLOTS }, () => ({ label: '', hasSound: false, buffer: null, loading: true }));
+    const padEls = Array.from(document.querySelectorAll('.pad'));
+    const playing = new Array(SLOTS).fill(null);
+    let booting = true;
+    let editing = false;
+    let ctx = null;
+
+    const $ = (id) => document.getElementById(id);
+    const els = {
+      status: $('status'), editToggle: $('editToggle'), dlg: $('editor'), title: $('edTitle'),
+      label: $('edLabel'), info: $('edInfo'), rec: $('edRecord'), upload: $('edUpload'),
+      preview: $('edPreview'), file: $('edFile'), msg: $('edMsg'), remove: $('edRemove'),
+      cancel: $('edCancel'), save: $('edSave'),
+    };
+
+    // ---------- server calls ----------
+    // text/plain keeps this a "simple" request, so the browser doesn't send a preflight Apps Script can't answer.
+    async function run(action, index, label, wav) {
+      if (!API_URL) throw new Error('not connected yet: paste the web app url into API_URL');
+      if (!/\/exec(\?|$)/.test(API_URL)) throw new Error('not connected: API_URL should be the web app link ending in /exec');
+      let res;
+      try {
+        res = await fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ action, index, label, wav }),
+        });
+      } catch (e) {
+        throw new Error('couldn’t reach the server. check your connection');
+      }
+      let data;
+      try { data = await res.json(); } catch (e) { throw new Error('the server sent something unexpected'); }
+      if (!data.ok) throw new Error(data.error || 'something went wrong');
+      return data.result;
+    }
+
+    // ---------- audio ----------
+    function audio() {
+      if (!ctx) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        ctx = new AC();
+        setSessionType('playback');
+      }
+      if (ctx.state !== 'running') ctx.resume().catch(() => {});
+      return ctx;
+    }
+    // iOS: 'playback' keeps sounds playing with the silent switch on. Recording needs 'play-and-record',
+    // and switching back afterwards stops playback staying quiet after the mic was used.
+    function setSessionType(type) {
+      try { if (navigator.audioSession) navigator.audioSession.type = type; } catch (e) {}
+    }
+    // Touch browsers only unlock audio on a finished tap, so unlock on the first one anywhere.
+    // iOS also leaves audio 'interrupted' after calls or locking the phone, so resume from any non-running state.
+    ['pointerup', 'touchend', 'click', 'keydown'].forEach((type) =>
+      document.addEventListener(type, () => { if (ctx && ctx.state !== 'running') ctx.resume().catch(() => {}); }, true));
+
+    function decode(arrayBuffer) {
+      return new Promise((resolve, reject) => audio().decodeAudioData(arrayBuffer, resolve, reject));
+    }
+
+    // Plays a buffer and returns a handle with stop(). If audio is still locked, it starts once unlocked
+    // (unless it was stopped first).
+    function startBuffer(buffer, onEnd) {
+      const ac = audio();
+      const src = ac.createBufferSource();
+      src.buffer = buffer;
+      src.connect(ac.destination);
+      let state = 'waiting';
+      src.onended = () => { state = 'done'; if (onEnd) onEnd(); };
+      const go = () => {
+        if (state !== 'waiting') return;
+        state = 'playing';
+        try { src.start(); } catch (e) {}
+      };
+      if (ac.state === 'running') go(); else ac.resume().then(go).catch(() => {});
+      return {
+        stop() {
+          if (state === 'playing') { try { src.stop(); } catch (e) {} }
+          state = 'done';
+        },
+      };
+    }
+
+    function stopPad(i) {
+      const handle = playing[i];
+      if (!handle) return;
+      playing[i] = null;
+      padEls[i].classList.remove('playing');
+      handle.stop();
+    }
+    function stopAll() { for (let i = 0; i < SLOTS; i++) stopPad(i); }
+
+    // Tap a pad to play it; tap it again while it's playing to stop it.
+    function play(i) {
+      if (playing[i]) { stopPad(i); return; }
+      const p = pads[i];
+      if (!p.buffer) {
+        toast(p.loading ? 'still loading that one…' : 'that sound didn’t load. try refreshing the page');
+        return;
+      }
+      const el = padEls[i];
+      const handle = startBuffer(p.buffer, () => {
+        if (playing[i] === handle) { playing[i] = null; el.classList.remove('playing'); }
+      });
+      playing[i] = handle;
+      el.classList.add('playing');
+    }
+
+    // Turn any decoded audio into a short, trimmed, normalized mono clip + WAV for saving.
+    async function toClip(input) {
+      const seconds = Math.min(input.duration, 60);
+      const length = Math.max(1, Math.ceil(seconds * RATE));
+      const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+      const off = new OAC(1, length, RATE);
+      const src = off.createBufferSource();
+      src.buffer = input;
+      src.connect(off.destination);
+      src.start();
+      const data = (await off.startRendering()).getChannelData(0);
+
+      // trim silence at both ends
+      const threshold = 0.02;
+      let start = 0, end = data.length - 1;
+      while (start < data.length && Math.abs(data[start]) < threshold) start++;
+      if (start >= data.length) return null;
+      while (end > start && Math.abs(data[end]) < threshold) end--;
+      start = Math.max(0, start - Math.round(0.03 * RATE));
+      end = Math.min(data.length, end + Math.round(0.15 * RATE));
+      let trimmed = false;
+      if (end - start > MAX_SECONDS * RATE) { end = start + MAX_SECONDS * RATE; trimmed = true; }
+      const out = data.slice(start, end);
+
+      // bring quiet recordings up to a good level (max 4x)
+      let peak = 0;
+      for (let k = 0; k < out.length; k++) peak = Math.max(peak, Math.abs(out[k]));
+      const gain = Math.min(4, 0.95 / peak);
+      if (gain > 1) for (let k = 0; k < out.length; k++) out[k] *= gain;
+
+      // tiny fades so clips don't click
+      const fadeIn = Math.min(out.length, Math.round(0.005 * RATE));
+      const fadeOut = Math.min(out.length, Math.round(0.03 * RATE));
+      for (let k = 0; k < fadeIn; k++) out[k] *= k / fadeIn;
+      for (let k = 0; k < fadeOut; k++) out[out.length - 1 - k] *= k / fadeOut;
+
+      const buffer = audio().createBuffer(1, out.length, RATE);
+      buffer.getChannelData(0).set(out);
+      return { buffer, b64: toBase64(encodeWav(out, RATE)), seconds: out.length / RATE, trimmed };
+    }
+
+    function encodeWav(samples, rate) {
+      const n = samples.length;
+      const buf = new ArrayBuffer(44 + n * 2);
+      const v = new DataView(buf);
+      const str = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+      str(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); str(8, 'WAVE');
+      str(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+      v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+      str(36, 'data'); v.setUint32(40, n * 2, true);
+      for (let i = 0, o = 44; i < n; i++, o += 2) {
+        const s = Math.max(-1, Math.min(1, samples[i]));
+        v.setInt16(o, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+      }
+      return new Uint8Array(buf);
+    }
+
+    function toBase64(bytes) {
+      let s = '';
+      for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      return btoa(s);
+    }
+    function fromBase64(b64) {
+      const s = atob(b64);
+      const bytes = new Uint8Array(s.length);
+      for (let i = 0; i < s.length; i++) bytes[i] = s.charCodeAt(i);
+      return bytes.buffer;
+    }
+
+    // ---------- board ----------
+    function renderPad(i) {
+      const p = pads[i];
+      const el = padEls[i];
+      el.className = 'cell pad ' + COLORS[i] + (playing[i] ? ' playing' : '');
+      el.textContent = '';
+      if (booting) { el.classList.add('loading'); el.setAttribute('aria-label', 'loading'); return; }
+
+      const pencil = document.createElement('span');
+      pencil.className = 'pencil';
+      pencil.textContent = '✎';
+      pencil.setAttribute('aria-hidden', 'true');
+
+      if (p.hasSound) {
+        if (p.loading) el.classList.add('loading');
+        el.append(p.label || '♪', pencil);
+        el.setAttribute('aria-label', (p.label || 'pad ' + (i + 1)) + (editing ? ', edit' : ', play'));
+      } else {
+        el.classList.add('empty');
+        if (p.label) {
+          const sub = document.createElement('span');
+          sub.className = 'sub';
+          sub.textContent = 'add sound';
+          el.append(p.label, sub, pencil);
+        } else {
+          const plus = document.createElement('span');
+          plus.className = 'plus';
+          plus.textContent = '+';
+          plus.setAttribute('aria-hidden', 'true');
+          el.append(plus, pencil);
+        }
+        el.setAttribute('aria-label', 'add a sound to pad ' + (i + 1));
+      }
+    }
+    function renderAll() { for (let i = 0; i < SLOTS; i++) renderPad(i); }
+
+    padEls.forEach((el, i) => {
+      // play on press (not release) so it feels instant
+      el.addEventListener('pointerdown', (e) => {
+        if (booting || e.button > 0) return;
+        el.classList.add('hit'); // pressed look (iOS ignores :active on its own)
+        if (editing || !pads[i].hasSound) return;
+        play(i);
+      });
+      ['pointerup', 'pointercancel', 'pointerleave'].forEach((type) =>
+        el.addEventListener(type, () => el.classList.remove('hit')));
+      el.addEventListener('click', (e) => {
+        if (booting) return;
+        if (editing || !pads[i].hasSound) openEditor(i);
+        else if (e.detail === 0) play(i); // keyboard Enter/Space
+      });
+    });
+    document.addEventListener('touchstart', () => {}, { passive: true }); // lets :active work on iOS buttons
+
+    document.addEventListener('keydown', (e) => {
+      if (els.dlg.open || e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === 'Escape') { stopAll(); return; }
+      if (editing) return;
+      const n = Number(e.key);
+      if (n >= 1 && n <= SLOTS && pads[n - 1].hasSound) {
+        play(n - 1);
+        const el = padEls[n - 1];
+        el.classList.add('hit');
+        setTimeout(() => el.classList.remove('hit'), 110);
+      }
+    });
+
+    els.editToggle.addEventListener('click', () => {
+      editing = !editing;
+      document.body.classList.toggle('editing', editing);
+      els.editToggle.textContent = editing ? '✓ done' : '✎ edit sounds';
+      renderAll();
+      toast(editing ? 'tap a pad to change it' : '');
+    });
+
+    let toastTimer = null;
+    function toast(text) {
+      els.status.textContent = text;
+      clearTimeout(toastTimer);
+      if (text) toastTimer = setTimeout(() => { if (els.status.textContent === text) els.status.textContent = ''; }, 3500);
+    }
+
+    async function init() {
+      renderAll();
+      try {
+        const board = await run('getBoard');
+        board.forEach((b, i) => Object.assign(pads[i], { label: b.label, hasSound: b.hasSound, loading: b.hasSound }));
+        booting = false;
+        renderAll();
+        if (!board.some((b) => b.hasSound)) toast('tap a pad to add a sound');
+        board.forEach((b, i) => { if (b.hasSound) loadSound(i); });
+      } catch (e) {
+        padEls.forEach((el) => el.classList.remove('loading'));
+        const msg = errText(e);
+        els.status.textContent = msg.startsWith('not connected') ? msg : 'couldn’t load the board. refresh to try again';
+      }
+    }
+
+    async function loadSound(i) {
+      let buffer = null, gone = false;
+      try {
+        const b64 = await run('getSound', i);
+        if (b64) buffer = await decode(fromBase64(b64));
+        else gone = true;
+      } catch (e) {
+        // leave this pad silent; it can be re-recorded
+      }
+      if (!pads[i].loading) return; // a new sound was saved or the pad was cleared while this loaded
+      pads[i].buffer = buffer;
+      if (gone) pads[i].hasSound = false;
+      pads[i].loading = false;
+      renderPad(i);
+      if (current === i) updateInfo();
+    }
+
+    // ---------- editor ----------
+    let current = -1;     // pad being edited
+    let pending = null;   // new clip not saved yet
+    let preview = null;
+    let recorder = null, recStream = null, recTimer = null, recStart = 0, recStarting = false;
+    let busy = false;
+    let session = 0;      // bumps on every open/close so late async work for a closed editor is dropped
+
+    function openEditor(i) {
+      session++;
+      current = i;
+      pending = null;
+      els.title.textContent = 'pad ' + (i + 1);
+      els.label.value = pads[i].label;
+      els.remove.hidden = !(pads[i].hasSound || pads[i].label);
+      disarmRemove();
+      say('');
+      setBusy(false);
+      updateInfo();
+      els.dlg.showModal();
+    }
+
+    function updateInfo() {
+      if (current < 0) return;
+      const p = pads[current];
+      let text;
+      if (pending) text = 'new sound · ' + fmt(pending.seconds) + (pending.trimmed ? ' (cut to ' + MAX_SECONDS + 's)' : '') + ' · not saved yet';
+      else if (p.buffer) text = 'current sound · ' + fmt(p.buffer.duration);
+      else if (p.hasSound) text = 'current sound · loading…';
+      else text = 'no sound yet. record one or upload a file (up to ' + MAX_SECONDS + 's)';
+      els.info.textContent = text;
+      els.preview.disabled = busy || !!recorder || !(pending || p.buffer);
+    }
+    const fmt = (s) => (s < 10 ? s.toFixed(1) : Math.round(s)) + 's';
+    const errText = (e) => String((e && e.message) || 'try again').replace(/^(Error|Exception):\s*/i, '');
+
+    function say(text, ok) {
+      els.msg.textContent = text;
+      els.msg.classList.toggle('ok', !!ok);
+    }
+
+    function setBusy(on, text) {
+      busy = on;
+      [els.upload, els.save, els.remove, els.label].forEach((b) => { b.disabled = on || !!recorder; });
+      els.rec.disabled = on;
+      updateInfo();
+      if (on && text) say(text, true);
+      else if (!on && els.msg.classList.contains('ok')) say('');
+    }
+
+    function stopPreview() {
+      if (preview) { try { preview.stop(); } catch (e) {} preview = null; }
+    }
+
+    els.preview.addEventListener('click', () => {
+      const buf = pending ? pending.buffer : pads[current].buffer;
+      if (!buf) return;
+      stopPreview();
+      preview = startBuffer(buf);
+    });
+
+    // record
+    els.rec.addEventListener('click', async () => {
+      if (recorder) { if (recorder.state === 'recording') recorder.stop(); return; }
+      if (recStarting) return; // already waiting on the mic
+      audio(); // unlock playback while we still have the tap
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) {
+        say('recording isn’t available in this browser. try uploading a voice memo instead');
+        return;
+      }
+      stopPreview();
+      const mySession = session;
+      recStarting = true;
+      setSessionType('play-and-record');
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch (e) {
+        recStarting = false;
+        releaseMic(null);
+        if (mySession === session) say('couldn’t use the mic. allow microphone access, or upload a voice memo instead');
+        return;
+      }
+      recStarting = false;
+      if (mySession !== session) { releaseMic(stream); return; } // editor closed meanwhile
+      let rec;
+      try {
+        rec = new MediaRecorder(stream);
+      } catch (e) {
+        releaseMic(stream);
+        say('recording isn’t available in this browser. try uploading a voice memo instead');
+        return;
+      }
+      recStream = stream;
+      recorder = rec;
+      const chunks = [];
+      rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+      rec.onstop = async () => {
+        clearInterval(recTimer);
+        releaseMic(stream);
+        recStream = null;
+        recorder = null;
+        if (mySession !== session) return; // editor was closed mid-recording
+        setRecordingUI(false);
+        const blob = new Blob(chunks, { type: rec.mimeType || 'audio/webm' });
+        await useAudio(blob.arrayBuffer(), mySession);
+      };
+      rec.start();
+      recStart = Date.now();
+      setRecordingUI(true);
+      recTimer = setInterval(() => {
+        const s = (Date.now() - recStart) / 1000;
+        els.rec.textContent = '■ stop · ' + Math.floor(s) + 's';
+        if (s >= MAX_SECONDS + 1 && rec.state === 'recording') rec.stop(); // a little extra for trimmed silence
+      }, 200);
+    });
+
+    function releaseMic(stream) {
+      if (stream) stream.getTracks().forEach((t) => t.stop());
+      setSessionType('playback');
+    }
+
+    function setRecordingUI(on) {
+      els.rec.classList.toggle('recording', on);
+      els.rec.textContent = on ? '■ stop · 0s' : '● record';
+      setBusy(false);
+      if (on) say('recording… tap stop when you’re done', true);
+    }
+
+    // upload
+    els.upload.addEventListener('click', () => { audio(); els.file.click(); });
+    els.file.addEventListener('change', async () => {
+      const file = els.file.files && els.file.files[0];
+      els.file.value = '';
+      if (!file) return;
+      stopPreview();
+      await useAudio(file.arrayBuffer(), session);
+    });
+
+    // bytesPromise: the raw audio file; mySession: the editor session it belongs to
+    async function useAudio(bytesPromise, mySession) {
+      if (mySession !== session) return;
+      setBusy(true, 'getting it ready…');
+      let clip;
+      try {
+        clip = await toClip(await decode(await bytesPromise));
+      } catch (e) {
+        if (mySession !== session) return;
+        setBusy(false);
+        say('couldn’t read that audio. try an mp3, m4a or wav file');
+        return;
+      }
+      if (mySession !== session) return; // editor was closed while processing
+      setBusy(false);
+      if (!clip) { say('that one came out silent. try again a little closer to the mic'); return; }
+      pending = clip;
+      updateInfo();
+      stopPreview();
+      preview = startBuffer(clip.buffer); // play it back right away
+    }
+
+    // save
+    // If the editor gets closed while a save or remove is in flight (cancel, Android back), the result still
+    // updates the pad, but never touches whatever editor is open by then.
+    els.save.addEventListener('click', async () => {
+      const i = current;
+      const mySession = session;
+      const clip = pending;
+      const label = els.label.value.trim();
+      if (!clip && label === pads[i].label) { els.dlg.close(); return; }
+      setBusy(true, 'saving…');
+      try {
+        const res = await run('saveSlot', i, label, clip ? clip.b64 : null);
+        pads[i].label = res.label;
+        pads[i].hasSound = res.hasSound;
+        if (clip) { pads[i].buffer = clip.buffer; pads[i].loading = false; }
+        renderPad(i);
+        toast('saved ♡');
+        if (mySession !== session) return;
+        setBusy(false);
+        els.dlg.close();
+      } catch (e) {
+        if (mySession !== session) return;
+        setBusy(false);
+        say('couldn’t save: ' + errText(e));
+      }
+    });
+
+    // remove (tap twice)
+    function disarmRemove() { els.remove.dataset.armed = ''; els.remove.textContent = 'remove'; }
+    els.remove.addEventListener('click', async () => {
+      if (!els.remove.dataset.armed) {
+        els.remove.dataset.armed = '1';
+        els.remove.textContent = 'tap again to remove';
+        return;
+      }
+      const i = current;
+      const mySession = session;
+      setBusy(true, 'removing…');
+      try {
+        await run('clearSlot', i);
+        Object.assign(pads[i], { label: '', hasSound: false, buffer: null, loading: false });
+        renderPad(i);
+        toast('cleared');
+        if (mySession !== session) return;
+        setBusy(false);
+        els.dlg.close();
+      } catch (e) {
+        if (mySession !== session) return;
+        setBusy(false);
+        say('couldn’t remove: ' + errText(e));
+      }
+    });
+
+    els.cancel.addEventListener('click', () => els.dlg.close());
+    els.label.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.isComposing) els.save.click(); });
+    els.dlg.addEventListener('cancel', (e) => { if (busy) e.preventDefault(); });
+    els.dlg.addEventListener('close', () => {
+      session++;
+      if (recorder && recorder.state === 'recording') recorder.stop();
+      els.rec.classList.remove('recording');
+      els.rec.textContent = '● record';
+      stopPreview();
+      current = -1;
+      pending = null;
+    });
+
+    init();
+  </script>
+</body>
+</html>
