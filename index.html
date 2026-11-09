@@ -82,7 +82,9 @@
       width: var(--w);
       height: var(--w);
     }
-    body.editing .board { --chrome: 256px; } /* room for the buttons picker */
+    @media (max-width: 559.98px) {
+      body.editing .board { --chrome: 256px; } /* room for the buttons picker */
+    }
     .board[data-size="12"] {
       --n: 4;
       --max: 680px;
@@ -217,11 +219,16 @@
     .pad .pencil {
       display: none;
       position: absolute;
-      top: calc(var(--radius) * .23);
-      right: calc(var(--radius) * .35);
+      bottom: calc(var(--radius) * .18);
+      right: calc(var(--radius) * .18);
       font-size: .75em;
+      line-height: 1;
+      transform: scaleX(-1); /* points the tip away from the rounded corner */
     }
     body.editing .pad .pencil { display: block; }
+    /* room under the label so the pencil never sits on top of it; the spacer keeps short labels centered */
+    body.editing .pad:not(.empty) { padding-block: 0 calc(.75em + var(--radius) * .18); }
+    body.editing .pad:not(.empty)::before { content: ''; flex: 0 1000 calc(.75em + var(--radius) * .18); margin-bottom: -2px; }
     body.editing .pad { animation: wiggle 1s ease-in-out infinite; }
     body.editing .pad.blue { animation-delay: -.5s; }
     @keyframes wiggle { 0%, 100% { rotate: -1.5deg; } 50% { rotate: 1.5deg; } }
@@ -275,6 +282,11 @@
     }
     .picker button[aria-pressed="true"] { background: var(--pink); }
     .status { min-height: 1.3em; margin: 0; color: var(--muted); font-size: 15px; text-align: center; }
+    /* short, wide screens: the picker goes beside the done button so the board keeps its size */
+    @media (min-width: 560px) and (max-height: 980px) {
+      .controls { flex-flow: row wrap; justify-content: center; }
+      .status { flex-basis: 100%; }
+    }
 
     .btn {
       font: inherit;
@@ -414,6 +426,7 @@
     let boardSize = 8;
     let savedSize = 8;    // the size the server has
     let sizeSaving = false;
+    let sizeFailed = false; // a size change failed and is waiting for the editor to close
     let cells = [];       // [row, col] of each showing pad
     let booting = true;
     let editing = false;
@@ -720,16 +733,21 @@
           savedSize = size;
         }
       } catch (e) {
-        if (current >= savedSize) els.dlg.close();
-        applySize(savedSize);
-        toast('couldn’t change the buttons. try again');
+        if (current >= savedSize) sizeFailed = true; // reverting now would hide the pad being edited
+        else revertSize();
       }
       sizeSaving = false;
     }
 
+    function revertSize() {
+      sizeFailed = false;
+      applySize(savedSize);
+      toast('couldn’t change the buttons. try again');
+    }
+
     els.picker.addEventListener('click', (e) => {
       const size = Number(e.target.dataset.size);
-      if (size) changeSize(size);
+      if (size && !booting) changeSize(size);
     });
 
     padEls.forEach((el, i) => {
@@ -766,10 +784,10 @@
     });
 
     els.editToggle.addEventListener('click', () => {
-      if (booting) return;
       editing = !editing;
       document.body.classList.toggle('editing', editing);
       els.editToggle.textContent = editing ? '✓ done' : '✎ edit sounds';
+      if (booting) return; // the board failed to load, so leave the pads and the retry message alone
       renderAll();
       toast(editing ? 'tap a pad to change it' : '');
     });
@@ -787,13 +805,14 @@
     }
 
     async function init() {
+      els.editToggle.disabled = true;
       applySize(rememberedSize());
       try {
         const res = await run('getBoard');
         const board = Array.isArray(res) ? { size: 8, pads: res } : res; // the backend used to return just the array
         board.pads.forEach((b, i) => Object.assign(pads[i], { label: b.label, hasSound: b.hasSound }));
         booting = false;
-        savedSize = validSize(board.size);
+        savedSize = validSize(Number(board.size));
         applySize(savedSize);
         if (!pads.slice(0, boardSize).some((p) => p.hasSound)) toast('tap a pad to add a sound');
       } catch (e) {
@@ -803,6 +822,8 @@
         // home screen apps have no refresh button, so the message itself retries
         els.status.textContent = 'couldn’t load the board. tap here to try again';
         els.status.onclick = () => { els.status.onclick = null; els.status.textContent = ''; init(); };
+      } finally {
+        els.editToggle.disabled = false;
       }
     }
 
@@ -1049,6 +1070,7 @@
       stopPreview();
       current = -1;
       pending = null;
+      if (sizeFailed) revertSize();
     });
 
     init();
